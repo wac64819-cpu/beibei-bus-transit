@@ -1,0 +1,146 @@
+# 重庆北碚公交换乘查询系统
+
+**Beibei Bus Transit Query System** — 基于 C++17 / Qt 6.8 / Leaflet.js 的多模态公交换乘路径规划与可视化系统。
+
+> 数据结构与算法综合实践课程设计项目（2026.06）。以重庆市北碚区为研究区域，使用真实站点坐标与线路数据，验证最短路径算法在换乘场景下的工程实现与性能差异。
+
+---
+
+## 项目目标
+
+城市公交换乘天然是一张加权有向图：站点是节点，相邻站点连成边，权重为通行时间。本项目要解决三个问题：
+
+1. **多模态**：公交、地铁、步行混合出行，支持「公交 → 步行 → 地铁」这类真实换乘；
+2. **多目标**：通过「换乘代价乘子」统一支持最短时间、最少换乘、综合最优三种优化目标；
+3. **可验证**：手写底层数据结构与算法，并给出 Dijkstra 与 A\* 的实测性能对比。
+
+---
+
+## 技术栈
+
+| 层次 | 实现 |
+| --- | --- |
+| 算法核心 | C++17，手写邻接表、数组二叉最小堆、Dijkstra、A\* |
+| 桌面端 | Qt 6.8（QMainWindow / QWebEngineView，C++ 与 JS 双向通信） |
+| 前端可视化 | Leaflet.js，本地矢量瓦片缓存，路径高亮与换乘配色 |
+| 数据流水线 | Python 3（高德开放平台 POI / Driving API）|
+| 数据集 | `stops.csv`（100 个站点）、`routes.csv`（23 条线路）、`road_polylines.json`（141 条真实道路曲线） |
+| 构建 | Visual Studio 2022 + Qt VS Tools，MSVC / C++17 |
+
+---
+
+## 核心实现
+
+### 1. 图存储与优先队列
+
+公交网络是典型稀疏图（节点度通常不超过 5），因此采用邻接表而非邻接矩阵，空间复杂度 O(V+E)：
+
+```cpp
+struct Edge {
+    int    to;
+    double weight;      // 通行时间（分钟）
+    double distance;    // 实际距离（公里）
+    QString routeId;
+    QString routeName;
+    QString mode;       // bus / metro / walk
+};
+```
+
+`MinHeap.h` 是手写模板类，实现 `push` / `pop` 的 `siftUp` / `siftDown`，使每次取最小节点与插入的复杂度降至 O(log n)，整体路径搜索复杂度 O((V+E) log V)。若退化为线性扫描，复杂度会恶化到 O(V²)。
+
+### 2. Dijkstra 与 A\*
+
+- **Dijkstra**：维护 `dist[]`，每轮取出最小代价节点并松弛出边。
+- **A\***：在 `g(n)` 之外引入启发函数 `h(n)`（起终点欧氏距离 / 最大速度），按 `f(n) = g(n) + h(n)` 扩展；`h(n)` 可采纳，保证最优解。
+- **换乘代价**：松弛时若当前边的 `routeId` 与上一跳不同，额外追加换乘惩罚，从而把「换乘次数」纳入同一代价函数。
+- **路径重建**：`prev[]` 反向回溯后按 `routeId` 分段，生成结构化的乘车方案（含沿途站点、总时长、总距离、换乘次数）。
+
+### 3. 多模态图构建
+
+- 公交线路相邻站点添加双向边；
+- 不同线路间地理距离 ≤ 800 m 的站点对，自动添加 `walk` 步行边；
+- 交通模式通过参数注册中心 `TransitMode` 管理，新增模式只需注册速度与换乘代价，无需改动核心算法。
+
+### 4. 数据流水线
+
+| 脚本 | 作用 |
+| --- | --- |
+| `build_master.py` | 通过高德 POI 接口构建北碚区站点主坐标表 |
+| `rebuild_helper.py` | 合并人工维护的 `routes_input/*.txt`，生成 `stops.csv` / `routes.csv` |
+| `fetch_road_polylines.py` | 调用 Driving API 抓取相邻站点间真实驾车路径，输出 `road_polylines.json` |
+| `rebuild_and_fetch.py` | 串联一键流程；抓取前自动检测**端点偏离 > 200 m** 的陈旧缓存并重抓，避免站点 ID 变化导致路径错位 |
+
+### 5. 可视化
+
+Leaflet.js 渲染矢量地图，公交站点为蓝色实心圆、地铁站点为紫色方块；路径采用「白色阴影 + 彩色主线」双层结构，每经过一次换乘自动切换配色，地铁段加粗、步行段用虚线。
+
+---
+
+## 性能实测
+
+在 **84 个节点、约 200 条边**的测试子图上，对 5 组典型起终点做对比：
+
+| 指标 | A\* 相对 Dijkstra |
+| --- | --- |
+| 平均节点扩展数 | **减少约 42%** |
+| 平均执行时间 | **减少约 41%** |
+
+差距随起终点欧氏距离增大而扩大，与启发式搜索「把搜索拉向目标」的理论预期一致。单次查询响应时间目标控制在 **200 ms** 以内。
+
+---
+
+## 目录结构
+
+```
+.
+├── core/                 # 图、最小堆、多模态注册、网络建模、路径算法
+│   ├── Graph.h / .cpp
+│   ├── MinHeap.h
+│   ├── TransitMode.h / .cpp
+│   ├── TransitNetwork.h / .cpp
+│   └── PathFinder.h / .cpp
+├── data/                 # 数据流水线脚本与三份核心 CSV
+├── web/
+│   ├── map.html          # Leaflet 地图与路径高亮
+│   └── road_polylines.json
+├── docs/
+│   └── 原始项目说明.txt
+├── main.cpp / mainwindow.*
+└── BusTransitSystem.sln  # VS2022 工程
+```
+
+---
+
+## 构建与运行
+
+1. 安装 Visual Studio 2022（MSVC C++17）、Qt 6.8 及 Qt VS Tools；
+2. 用 VS 打开 `BusTransitSystem.sln`，配置 Qt 版本后编译；
+3. 运行后在界面选择起点、终点与优化目标（最短时间 / 最少换乘 / 综合最优）。
+
+### 重新采集数据（可选）
+
+数据脚本需要高德开放平台 Web 服务 Key。**请勿把 Key 写进代码**，通过环境变量提供：
+
+```bash
+# Windows PowerShell
+$env:AMAP_API_KEY = "your_key_here"
+python data/rebuild_and_fetch.py
+```
+
+```bash
+# Linux / macOS
+export AMAP_API_KEY=your_key_here
+python data/rebuild_and_fetch.py
+```
+
+仓库内的 `data/*.py` 与 `*.ps1` 均从 `AMAP_API_KEY` 环境变量读取，未包含任何凭据。
+
+> **离线瓦片说明**：`web/tiles/`（约 14 MB 高德矢量瓦片缓存，zoom 12–16）与 `web/lib/`（Leaflet 本地副本）**未随仓库分发**，以避免体积膨胀与第三方资源再分发问题。需要离线底图时，请自行按 `web/download_tiles.ps1` 下载，或修改 `map.html` 指向在线瓦片服务。
+
+---
+
+## 说明
+
+- 本项目为课程设计，数据来自高德开放平台公开接口，仅用于教学与研究；
+- 课程报告、答辩材料等含个人信息的文档未包含在仓库中；
+- 结果指标（42% / 41%）基于本报告所述的测试子图与 5 组查询，不同数据集上结果会有差异。

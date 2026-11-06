@@ -1,0 +1,44 @@
+重庆北碚公交换乘查询系统 —— 完整项目
+============================================
+
+【目录结构】
+  BusTransitSystem.sln / .vcxproj   Visual Studio 工程文件（用 VS2022 + Qt6.8 打开编译）
+  main.cpp                          程序入口
+  mainwindow.cpp / .h               Qt 主窗口（UI + 业务串联 + C++/JS 通信）
+  core/                             C++ 核心算法层
+    Graph.h / .cpp                    邻接表
+    MinHeap.h                         二叉最小堆（模板类）
+    TransitMode.h / .cpp              多模态参数注册中心
+    TransitNetwork.h / .cpp           图建模（含步行换乘边自动生成）
+    PathFinder.h / .cpp               Dijkstra 与 A* 算法
+  data/                             数据层
+    stops.csv                         100 个站点（编号/名称/经纬度）
+    routes.csv                        24 条线路（站点序列/颜色/类型）
+    master_stops_beibei.csv           北碚站点主坐标库
+    routes_input/*.txt                人工维护的线路文本（一线一文件）
+    rebuild_helper.py                 线路文本 → CSV
+    fetch_road_polylines.py           高德 API 抓真实道路曲线（含陈旧缓存校验）
+    rebuild_and_fetch.py              一键数据流水线
+    其余 *.py                         数据采集/地理编码辅助脚本
+  web/                              前端可视化
+    map.html                          Leaflet 地图 + 路径高亮逻辑
+    lib/leaflet/                      Leaflet 库（本地副本）
+    tiles/{z}/{x}/{y}.png             离线高德矢量瓦片（z=12-16）
+    road_polylines.json               真实道路曲线缓存（141 条）
+  论文文档/                          课程报告、答辩材料、技术实现详解（Word）
+
+【如何编译运行】
+  1. 用 Visual Studio 2022 打开 BusTransitSystem.sln
+  2. 确保已安装 Qt 6.8 (msvc2022_64) 及 Qt VS Tools 扩展
+  3. 选择 x64 / Debug 或 Release，生成并运行
+  4. 程序会自动从 data/ 读取 CSV、从 web/ 加载地图
+
+【如何新增公交线路】
+  1. 在 data/routes_input/ 新建一个 线路名.txt（格式见现有文件）
+  2. 运行 python rebuild_and_fetch.py
+  3. 重启程序即可看到新线路
+
+【技术栈】
+  C++17 / Qt 6.8 / Qt WebEngine / Leaflet.js / 高德 Web API / Python 3.12
+
+注：本压缩包不含 x64 编译产物和 .vs 缓存，首次打开需自行编译生成。
