@@ -1,0 +1,52 @@
+# 凭据与本地配置
+.env
+*.local
+*api_key*
+*secret*
+
+# Visual Studio / Qt 构建产物
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.suo
+*.obj
+*.pdb
+*.ilk
+*.tlog
+*.log
+GeneratedFiles/
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# 离线瓦片与第三方库（体积大 / 不随仓库分发）
+web/tiles/
+web/lib/
+
+# 课程文档（含个人信息，不公开）
+*.docx
+*.pptx
+*.pdf
+论文文档/
+
+# 数据中间产物
+data/*_backup.csv
+data/*_v2.csv
+data/*_rebuilt.csv
+data/*_original.csv
+data/*_geocoded.csv
+data/*_reference.csv
+data/*_summary.txt
+data/geocode_report.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 系统
+Thumbs.db
+.DS_Store
